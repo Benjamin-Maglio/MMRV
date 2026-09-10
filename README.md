@@ -22,5 +22,15 @@ with that used in development.
 
 Or by following the instructions on the `conda` website if these are unavailable.
 
-Once installed, our environment can be replicated by running:
-```conda env create -f environment.yml```
+Once installed, create an environment for working with this project:
+```conda create --name <name for environment> python=3.11``` 
+
+Activate your new environment with:
+```conda activate <name for environment>```
+
+You can then install necessary dependencies with:
+```conda install --file requirements.txt```
+>[!NOTE]
+>Working on creating final `requirements.txt`, there is currently a `.yml` file which is
+>not currently functioning correctly.
+
