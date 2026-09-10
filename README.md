@@ -19,6 +19,7 @@ with that used in development.
 - [Windows](https://docs.conda.io/projects/conda/en/latest/user-guide/install/windows.html)
 - [macOS](https://docs.conda.io/projects/conda/en/latest/user-guide/install/macos.html)
 - [Linux](https://docs.conda.io/projects/conda/en/latest/user-guide/install/linux.html)
+
 Or by following the instructions on the `conda` website if these are unavailable.
 
 Once installed, our environment can be replicated by running:
