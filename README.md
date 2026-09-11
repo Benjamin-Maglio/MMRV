@@ -22,15 +22,12 @@ with that used in development.
 
 Or by following the instructions on the `conda` website if these are unavailable.
 
-Once installed, create an environment for working with this project:
-```conda create --name <name for environment> python=3.11``` 
+Once installed, create an environment for working with this project based on `environment.yml`:
+```conda create --name <environment_name> --file environment.yml``` 
 
 Activate your new environment with:
-```conda activate <name for environment>```
+```conda activate <environment_name>```
 
-You can then install necessary dependencies with:
-```conda install --file requirements.txt```
->[!NOTE]
->Working on creating final `requirements.txt`, there is currently a `.yml` file which is
->not currently functioning correctly.
-
+## Quick Start
+Below is a series of steps assuming this is the first time his repository and 
+subsequent data has been downloaded.
