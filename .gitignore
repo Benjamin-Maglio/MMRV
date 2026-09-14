@@ -2,8 +2,9 @@
 .DS_Store
 scripts/.DS_Store
 
-# NISAR data
+# Data file types
 *.h5
 *.h5.aux.xml
 *.nc
 *.gpkg
+*.pkl

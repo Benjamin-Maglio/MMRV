@@ -3,14 +3,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 from pyproj import Transformer
+import pickle
 
 transformer = Transformer.from_crs("EPSG:4326", "EPSG:6933", always_xy=True)
 
-st = pd.read_pickle("/Users/BenMaglio/develop/projects/boulder_county/data/processed_data/sawtooth_ismn.pkl")
-wb = pd.read_pickle("/Users/BenMaglio/develop/projects/boulder_county/data/processed_data/wildbasin_ismn.pkl")
-bw = pd.read_pickle("/Users/BenMaglio/develop/projects/boulder_county/data/processed_data/boulder_14_W.pkl")
+st = pd.read_pickle("./data/processed_data/international_soil_moisture_data/Sawtooth.pkl")
+wb = pd.read_pickle("./data/processed_data/international_soil_moisture_data/WildBasin.pkl")
+bw = pd.read_pickle("./data/processed_data/international_soil_moisture_data/Boulder-14-W.pkl")
 
-sme2 = xr.open_dataset("/Users/BenMaglio/develop/projects/boulder_county/data/processed_data/nisar_test_stack.nc", engine='netcdf4')
+sme2 = xr.open_dataset("./data/processed_data/NISAR_L3_SME2_PROVISIONAL_V1.nc", engine='netcdf4')
 
 fig, ax = plt.subplots(1,3)
 

@@ -1,9 +1,10 @@
 import pandas as pd
+from pathlib import Path
 import glob
 import re
 from IPython import embed
 import pickle
-
+import os
 
 def read_ismn_stm(filepath):
     """Read a single ISMN .stm soil moisture file into a DataFrame."""
@@ -33,20 +34,31 @@ def read_ismn_stm(filepath):
     )
     return df
 
-# Load and merge all depths for this station
-files = sorted(glob.glob("../data/raw_data/Data_separate_files_header_20251001_20260828_13850_i7SO_20260828/USCRN/Boulder-14-W/*Boulder-14-W*sm_*.stm"))
-depth_dfs = [read_ismn_stm(f) for f in files]
-sm = pd.concat(depth_dfs, axis=1)
+rel_dir = "./data/raw_data/international_soil_moisture_data/Data_separate_files_header_20251001_20260828_13850_i7SO_20260828/"
 
-# Quick look
-print(sm.head())
-print(sm.xs("value", axis=1, level=1).describe())  # just the values, all depths
+ismn_dirs = [
+    "USCRN/Boulder-14-W",
+    "SNOTEL/Sawtooth",
+    "SNOTEL/WildBasin"
+]
 
-# Static site metadata (soil texture, land cover, climate)
-static = pd.read_csv(
-    "../data/raw_data/Data_separate_files_header_20251001_20260828_13850_i7SO_20260828/USCRN/Boulder-14-W/USCRN_USCRN_Boulder-14-W_static_variables.csv",
-    sep=";",
-)
-print(static)
+results = {key: [] for key in ismn_dirs}
 
-sm.to_pickle("../data/processed_data/ismn/boulder_14_W.pkl")   # attrs included automatically
+for i, site in enumerate(ismn_dirs):
+
+    site_name = site.split("/")[1]
+
+    # Load and merge all depths for this station
+    files = sorted(glob.glob(os.path.join(rel_dir+site, "*.stm")))
+    
+    depth_dfs = [read_ismn_stm(f) for f in files]
+    
+    sm = pd.concat(depth_dfs, axis=1)
+
+    var_file = [name for name in os.listdir(rel_dir+site) if os.listdir(rel_dir+site) and ".csv" in name][0]
+
+    # Static site metadata (soil texture, land cover, climate)
+    static = pd.read_csv(os.path.join(rel_dir+site, var_file), sep=";")
+
+    # save to Pickle for quick review of data
+    sm.to_pickle(f"./data/processed_data/international_soil_moisture_data/{site_name}.pkl")   # attrs included automatically

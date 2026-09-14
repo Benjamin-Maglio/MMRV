@@ -66,7 +66,7 @@ def find_corrupted_h5_files(path_to_raw_data):
             bad_files.append(fp)
     return bad_files
 
-def download_data(path_to_raw_data, date_from='2025-09', date_to=date.today().strftime("%Y-%m")):
+def download_data(path_to_raw_data, polygon_file, nisar_short_name, date_start, date_end, inspect=False):
   '''
   This function will download new data files 
   as identified by check_existing_data.
@@ -79,9 +79,12 @@ def download_data(path_to_raw_data, date_from='2025-09', date_to=date.today().st
   names
   '''
 
-  # Load National Census Counties Polygons
-  # https://geodata.colorado.gov/datasets/14c5450526a8430298b2fa74da12c2f4_0/explore?location=45.137928%2C-123.049258%2C3
-  gdf = gpd.read_file('../data/raw_data/usa_census_counties/USA_Census_Counties_-2455842672934463084.gpkg')
+  # Load area of interest - this could be make more generic for multiple polygon formats (e.g. .shp, .kml, .geojson, etc.)
+  print("This workflow was initially developed using the following dataset in geopackage format:")
+  print("https://geodata.colorado.gov/datasets/14c5450526a8430298b2fa74da12c2f4_0/explore?location=45.137928%2C-123.049258%2C3\n")
+  print(polygon_file,"\n")
+  gdf = gpd.read_file(polygon_file)
+  
 
   # Select Boulder County geometry
   geom = gdf.geometry.iloc[gdf[gdf['NAME']=='Boulder County'].index[0]]
@@ -92,9 +95,9 @@ def download_data(path_to_raw_data, date_from='2025-09', date_to=date.today().st
   # Query search Earth Data for NISAR SME2 data 
   # There is NISAR_L3_SME2_BETA_V1 and NISAR_L3_SME2_PROVISIONAL_V1 
   results = earthaccess.search_data(
-    short_name="NISAR_L3_SME2_PROVISIONAL_V1",
+    short_name=nisar_short_name,
     bounding_box=geom.bounds,
-    temporal=(date_from, date_to)
+    temporal=(date_start, date_end)
   )
 
   print(results)
@@ -118,9 +121,12 @@ def download_data(path_to_raw_data, date_from='2025-09', date_to=date.today().st
           for f in remaining:
               print(" ", f)
 
+  if inspect:
+    inspect_h5_file(results[0])
+
   return 
 
-def load_extend_and_clip_raw_nisar_data(filepath, variables=None):
+def load_extend_and_clip_raw_nisar_data(filepath, polygon_file, variables=None):
     '''
     Load in, pad / extend, and then clip raw data
     to shapefile extent of bounding box.
@@ -133,7 +139,7 @@ def load_extend_and_clip_raw_nisar_data(filepath, variables=None):
         Names of data variables to keep from the group. If None,
         all variables in the group are kept.
     '''
-    ds = xr.open_dataset(filepath, group="science/LSAR/SME2/grids", engine="h5netcdf")
+    ds = xr.open_dataset(filepath, group="science/LSAR/SME2/grids", engine="h5netcdf") # this would need to be made more flexible / automated
     ds = ds.rio.set_spatial_dims(x_dim="xCoordinates", y_dim="yCoordinates")
     ds = ds.rio.write_crs("EPSG:6933")
 
@@ -145,9 +151,8 @@ def load_extend_and_clip_raw_nisar_data(filepath, variables=None):
             raise ValueError(f"Requested variables not found in {filepath}: {missing}")
         ds = ds[variables]
 
-    polygonpath = "../data/raw_data/usa_census_counties/"
-    polygonfile = "USA_Census_Counties_-2455842672934463084.gpkg"
-    gdf = gpd.read_file(polygonpath + polygonfile).to_crs(ds.rio.crs)
+    # Load area of interest - this could be make more generic for multiple polygon formats (e.g. .shp, .kml, .geojson, etc.)
+    gdf = gpd.read_file(polygon_file).to_crs(ds.rio.crs)
     polygon = gdf[gdf["NAME"] == "Boulder County"]
 
     if gdf.crs != ds.rio.crs:
@@ -177,7 +182,7 @@ def extract_datetime_from_filename(filepath):
         raise ValueError(f"Could not parse datetime from filename: {filepath}")
     return pd.to_datetime(match.group(1), format="%Y%m%dT%H%M%S")
 
-def build_nisar_timeseries(path_to_raw_data, variables=None):
+def build_nisar_timeseries(path_to_raw_data, processed_data_directory, polygon_file, nisar_short_name, variables=None, inspect=False):
     '''
     Loop through NISAR files, extend/clip each to polygon extent,
     and concatenate into a single Dataset along a time dimension.
@@ -194,8 +199,11 @@ def build_nisar_timeseries(path_to_raw_data, variables=None):
 
     filepaths = [os.path.join(path_to_raw_data, f) for f in os.listdir(path_to_raw_data) if f.endswith('.h5')]
 
+    if inspect:
+        inspect_h5_file(filepaths[0])
+
     for fp in sorted(filepaths):
-        ds_clipped = load_extend_and_clip_raw_nisar_data(fp, variables=variables)
+        ds_clipped = load_extend_and_clip_raw_nisar_data(fp, polygon_file, variables=variables)
         timestamp = extract_datetime_from_filename(fp)
 
         ds_clipped = ds_clipped.expand_dims(time=[timestamp])
@@ -212,7 +220,9 @@ def build_nisar_timeseries(path_to_raw_data, variables=None):
     ds_combined = xr.concat(ds_list, dim="time", join="outer")
     ds_combined = ds_combined.sortby("time")
 
-    ds_combined.to_netcdf("../data/processed_data/nisar_sme2/nisar_sme2_processed.nc", engine="netcdf4")
+    print(f"{os.path.join(processed_data_directory, nisar_short_name)}.nc")
+
+    ds_combined.to_netcdf(f"{os.path.join(processed_data_directory, nisar_short_name)}.nc", engine="netcdf4")
 
     return 
 
@@ -221,33 +231,49 @@ def build_nisar_timeseries(path_to_raw_data, variables=None):
 
 
 def main(raw_data_directory, processed_data_directory, polygon_file,
-         nisar_short_name="NISAR_L3_SME2_PROVISIONAL_V1",
-         variables=['soilMoisture', 'soilMoistureUncertainty'],
-         date_start='2025-08', date_end=date.today().strftime("%Y-%m"),
+         nisar_short_name, variables, date_start, date_end,
          inspect=False, download=False):
 
         if download:
-            print('Initiating data search and download...')
-            download_data(raw_data_directory, date_start, date_end)
+            print('======================================')
+            print('Initiating data search and download...\n')
+            download_data(raw_data_directory, polygon_file, nisar_short_name, date_start, date_end, inspect=False)
+        if processed_data_directory!=None:
+                print('=======================================================')
+                print('Initiating compiling of NISAR time series from raw data...\n')
+                build_nisar_timeseries(raw_data_directory, processed_data_directory, polygon_file, nisar_short_name, variables, inspect=False)
 
-        print('Initiating compiling NISAR time series from raw data...')
-        build_nisar_timeseries(raw_data_directory, variables)
-        
+DEFAULT_SHORT_NAME = "NISAR_L3_SME2_PROVISIONAL_V1"
+DEFAULT_VARIABLES = ['soilMoisture', 'soilMoistureUncertainty']
+DEFAULT_DATE_START = '2025-07'
+DEFAULT_DATE_END = date.today().strftime("%Y-%m")
+DEFAULT_INSPECT = False
+DEFAULT_DOWNLOAD = False
+
 # CLI
 if __name__ == "__main__":
    parser = argparse.ArgumentParser(description="Tool for downloading and processing NISAR data." \
    "Still in development, but will likely need a few modifications to work with different NISAR products" \
    "and with shapefiles (being consistent with how they are referenced in the code).")
 
-#    parser.add_argument("output_file_path", type=str, help="Path to file for plotting.")
+   parser.add_argument("raw_data_directory", type=str, help="Directory path to store raw NISAR data.")
 
-#    parser.add_argument("--runmask", type=str, help="Path to runmask used for masking out un-run pixels.")
-#    parser.add_argument("--variable", type=str, help="Name of variable for plotting (e.g. GPP).")
-#    parser.add_argument("--time", type=str, help="Time string used for map plot at fixed temporal step")
-#    parser.add_argument("--outdir", type=str, help="Directory path to output .png files.")
-#    parser.add_argument("--preview", type=bool, help="True/False as to whether to preview plot.")
-#    parser.add_argument("--save", type=bool, help="True/False as to whether to save plot.")
-#    parser.add_argument("--label", type=str, help="Label added to plot file name and title.")
-#    args = parser.parse_args()
+   parser.add_argument("--processed_data_directory", type=str, help="Directory path to store processed NISAR data.")
+   parser.add_argument("--polygon_file", type=str, help="File path to polygon of area of interest. This is currently in GeoPackage format.")
 
-#    main(args.output_file_path, args.runmask, args.variable, args.time, args.outdir, preview=args.preview, save=args.save, label=args.label)
+   parser.add_argument("--nisar_short_name", type=str, default=DEFAULT_SHORT_NAME,
+                         help=f"Short name for NISAR data download (default: {DEFAULT_SHORT_NAME}).")
+   parser.add_argument("--variables", nargs="+", default=DEFAULT_VARIABLES,
+                         help=f"Space-separated list of variables to process (default: {DEFAULT_VARIABLES})")
+   parser.add_argument("--date_start", type=str, default=DEFAULT_DATE_START,
+                         help=f"Start of date window (default: {DEFAULT_DATE_START}, i.e. launch date).")
+   parser.add_argument("--date_end", type=str, default=date.today().strftime("%Y-%m"),
+                         help=f"End of date window (default: {DEFAULT_DATE_END} should be today's date, NOTE: this may be a large amount of data).")
+
+   parser.add_argument("--inspect", action="store_true", help="Print details of first downloaded file. Files must exist of be downloaded.")
+   parser.add_argument("--download", action="store_true", help="Download data, set to False if data is already downloaded.")
+
+   args = parser.parse_args()
+   
+   main(args.raw_data_directory, args.processed_data_directory, args.polygon_file, args.nisar_short_name, args.variables, 
+   args.date_start, args.date_end, inspect=args.inspect, download=args.download)
