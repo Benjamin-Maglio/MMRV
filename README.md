@@ -29,5 +29,11 @@ Activate your new environment with:
 ```conda activate <environment_name>```
 
 ## Quick Start
-Below is a series of steps assuming this is the first time his repository and 
+Below is a series of steps assuming this is the first time this repository and 
 subsequent data has been downloaded.
+
+> [!NOTE]
+> Some paths are hard-coded (e.g. in `ismn_data_processing.py`) so it is best to run scripts
+> i.e. `python ./scripts/ismn_data_processing.py` from the main repository directory.
+
+
